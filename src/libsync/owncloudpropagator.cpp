@@ -72,19 +72,19 @@ OwncloudPropagator::~OwncloudPropagator()
 
 int OwncloudPropagator::maximumActiveTransferJob()
 {
-    if (_bandwidthManager || !_syncOptions._parallelNetworkJobs) {
+    if (_bandwidthManager || !_syncOptions._parallelNetworkJobs()) {
         // disable parallelism when there is a network limit.
         return 1;
     }
-    return qMin(3, qCeil(_syncOptions._parallelNetworkJobs / 2.));
+    return std::max(3, qCeil(_syncOptions._parallelNetworkJobs() / 2.));
 }
 
 /* The maximum number of active jobs in parallel  */
 int OwncloudPropagator::hardMaximumActiveJob()
 {
-    if (!_syncOptions._parallelNetworkJobs)
+    if (!_syncOptions._parallelNetworkJobs())
         return 1;
-    return _syncOptions._parallelNetworkJobs;
+    return _syncOptions._parallelNetworkJobs();
 }
 
 PropagateItemJob::~PropagateItemJob()
