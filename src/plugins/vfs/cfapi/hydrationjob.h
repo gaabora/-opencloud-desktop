@@ -4,46 +4,43 @@
  */
 #pragma once
 
-#include <QObject>
+#include "csync/common/syncjournalfilerecord.h"
+#include "libsync/account.h"
 
-#include "account.h"
+#include <QNetworkReply>
 
 class QLocalServer;
 class QLocalSocket;
 
 namespace OCC {
-class EncryptedFolderMetadataHandler;
 class GETFileJob;
 class SyncJournalDb;
 class VfsCfApi;
 
-namespace EncryptionHelper {
-    class StreamingDecryptor;
-};
-
+// TODO: check checksums
 class HydrationJob : public QObject
 {
     Q_OBJECT
 public:
-    enum Status {
+    enum class Status {
         Success = 0,
         Error,
         Cancelled,
     };
     Q_ENUM(Status)
 
-    explicit HydrationJob(QObject *parent = nullptr);
+    explicit HydrationJob(VfsCfApi *parent);
 
     ~HydrationJob() override;
 
     AccountPtr account() const;
     void setAccount(const AccountPtr &account);
 
-    [[nodiscard]] QString remoteSyncRootPath() const;
-    void setRemoteSyncRootPath(const QString &path);
+    [[nodiscard]] QUrl remoteSyncRootPath() const;
+    void setRemoteSyncRootPath(const QUrl &path);
 
-    QString localPath() const;
-    void setLocalPath(const QString &localPath);
+    QString localRoot() const;
+    void setLocalRoot(const QString &localPath);
 
     SyncJournalDb *journal() const;
     void setJournal(SyncJournalDb *journal);
@@ -51,17 +48,14 @@ public:
     QString requestId() const;
     void setRequestId(const QString &requestId);
 
-    QString folderPath() const;
-    void setFolderPath(const QString &folderPath);
+    QString localFilePathAbs() const;
+    void setLocalFilePathAbs(const QString &folderPath);
 
-    bool isEncryptedFile() const;
-    void setIsEncryptedFile(bool isEncrypted);
+    QString remotePathRel() const;
+    void setRemoteFilePathRel(const QString &path);
 
-    QString e2eMangledName() const;
-    void setE2eMangledName(const QString &e2eMangledName);
-
-    qint64 fileTotalSize() const;
-    void setFileTotalSize(qint64 totalSize);
+    const SyncJournalFileRecord &record() const;
+    void setRecord(SyncJournalFileRecord &&record);
 
     Status status() const;
 
@@ -73,11 +67,8 @@ public:
     void cancel();
     void finalize(OCC::VfsCfApi *vfs);
 
-signals:
+Q_SIGNALS:
     void finished(HydrationJob *job);
-
-private slots:
-    void slotFetchMetadataJobFinished(int statusCode, const QString &message);
 
 private:
     void emitFinished(Status status);
@@ -91,30 +82,29 @@ private:
 
     void startServerAndWaitForConnections();
 
+    VfsCfApi *_parent;
     AccountPtr _account;
-    QString _remoteSyncRootPath;
-    QString _localPath;
+    QUrl _remoteSyncRootPath;
+    QString _localRoot;
     SyncJournalDb *_journal = nullptr;
     bool _isCancelled = false;
 
     QString _requestId;
-    QString _folderPath;
+    QString _localFilePathAbs;
+    QString _remoteFilePathRel;
 
-    bool _isEncryptedFile = false;
-    QString _e2eMangledName;
+    SyncJournalFileRecord _record;
 
     QLocalServer *_transferDataServer = nullptr;
     QLocalServer *_signalServer = nullptr;
     QLocalSocket *_transferDataSocket = nullptr;
     QLocalSocket *_signalSocket = nullptr;
-    GETFileJob *_job = nullptr;
-    Status _status = Success;
-    int _errorCode = 0;
+    QPointer<GETFileJob> _job;
+    Status _status = Status::Success;
+    QNetworkReply::NetworkError _errorCode = QNetworkReply::NoError;
     int _statusCode = 0;
     QString _errorString;
     QString _remoteParentPath;
-
-    QScopedPointer<EncryptedFolderMetadataHandler> _encryptedFolderMetadataHandler;
 };
 
 } // namespace OCC

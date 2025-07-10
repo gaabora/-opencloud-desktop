@@ -17,6 +17,7 @@
 
 using namespace std::chrono_literals;
 using namespace std::chrono;
+using namespace Qt::Literals::StringLiterals;
 
 
 PathComponents::PathComponents(const QString &path)
@@ -885,13 +886,12 @@ void FakeFolder::switchToVfs(QSharedPointer<OCC::Vfs> vfs)
     opts._vfs = vfs;
     _syncEngine->setSyncOptions(opts);
 
-    OCC::VfsSetupParams vfsParams(account(), OCC::TestUtils::dummyDavUrl(), false, &syncEngine());
+    OCC::VfsSetupParams vfsParams(account(), u"TestFolder"_s, OCC::TestUtils::dummyDavUrl(), false, &syncEngine());
     vfsParams.filesystemPath = localPath();
     vfsParams.journal = _journalDb.get();
     vfsParams.providerName = QStringLiteral("OC-TEST");
     vfsParams.providerDisplayName = QStringLiteral("OC-TEST");
     vfsParams.providerVersion = QVersionNumber(0, 1, 0);
-    vfsParams.multipleAccountsRegistered = false;
     QObject::connect(_syncEngine.get(), &QObject::destroyed, vfs.data(), [vfs]() {
         vfs->stop();
         vfs->unregisterFolder();
