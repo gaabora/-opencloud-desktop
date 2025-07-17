@@ -123,15 +123,30 @@ Utility::NtfsPermissionLookupRAII::~NtfsPermissionLookupRAII()
 }
 
 
-Utility::Handle::Handle(HANDLE h, std::function<void(HANDLE)> &&close)
+Utility::Handle::Handle(HANDLE h, std::function<void(HANDLE)> &&close, uint32_t error)
     : _handle(h)
     , _close(std::move(close))
+    , _error(error)
 {
+    if (_handle == INVALID_HANDLE_VALUE && _error == NO_ERROR) {
+        _error = GetLastError();
+    }
+}
+
+Utility::Handle Utility::Handle::createHandle(const std::filesystem::path &path, const CreateHandleParameter &p)
+{
+    uint32_t flags = FILE_ATTRIBUTE_NORMAL | FILE_FLAG_BACKUP_SEMANTICS;
+    if (!p.followSymlinks) {
+        flags |= FILE_FLAG_OPEN_REPARSE_POINT;
+    }
+    if (p.async) {
+        flags |= FILE_FLAG_OVERLAPPED;
+    }
+    return Utility::Handle{CreateFileW(path.native().data(), p.accessMode, p.shareMode, nullptr, p.creationFlags, flags, nullptr)};
 }
 
 Utility::Handle::Handle(HANDLE h)
-    : _handle(h)
-    , _close(&CloseHandle)
+    : Handle(h, &CloseHandle)
 {
 }
 
@@ -146,6 +161,21 @@ void Utility::Handle::close()
         _close(_handle);
         _handle = INVALID_HANDLE_VALUE;
     }
+}
+
+uint32_t Utility::Handle::error() const
+{
+    return _error;
+}
+
+bool Utility::Handle::hasError() const
+{
+    return _error != NO_ERROR;
+}
+
+QString Utility::Handle::errorMessage() const
+{
+    return formatWinError(_error);
 }
 
 
