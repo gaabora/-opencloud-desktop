@@ -4,7 +4,11 @@
 #include "libsync/discoveryinfo.h"
 #include "libsync/filesystem.h"
 
+#ifdef Q_OS_WIN
+#include "libsync/common/utility_win.h"
+#else
 #include <sys/stat.h>
+#endif
 
 using namespace OCC;
 
@@ -49,6 +53,15 @@ OCC::LocalInfo::LocalInfo(const std::filesystem::directory_entry &dirent, ItemTy
     isHidden = sb.st_flags & UF_HIDDEN;
 #endif
 #endif
+}
+LocalInfo::LocalInfo(const std::filesystem::directory_entry &dirent)
+    : LocalInfo(dirent, LocalInfo::typeFromDirectoryEntry(dirent))
+{
+}
+
+LocalInfo::LocalInfo(const std::filesystem::path &path)
+    : LocalInfo(std::filesystem::directory_entry{path})
+{
 }
 
 ItemType LocalInfo::typeFromDirectoryEntry(const std::filesystem::directory_entry &dirent)
