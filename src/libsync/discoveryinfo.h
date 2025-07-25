@@ -5,9 +5,14 @@
 #include "libsync/common/remotepermissions.h"
 #include "libsync/csync.h"
 
+#include <QSharedData>
+
 #include <filesystem>
 
 namespace OCC {
+
+class LocalInfoData;
+
 /**
  * Represent all the meta-data about a file in the server
  */
@@ -31,26 +36,36 @@ struct RemoteInfo
 class OPENCLOUD_SYNC_EXPORT LocalInfo
 {
 public:
-    LocalInfo() = default;
+    LocalInfo();
+    ~LocalInfo();
+    LocalInfo(const LocalInfo &other);
+    LocalInfo &operator=(const LocalInfo &other);
+
     LocalInfo(const std::filesystem::directory_entry &dirent, ItemType type);
     LocalInfo(const std::filesystem::directory_entry &dirent);
     LocalInfo(const std::filesystem::path &path);
+    QT_MOVE_ASSIGNMENT_OPERATOR_IMPL_VIA_MOVE_AND_SWAP(LocalInfo);
+
+
+    void swap(LocalInfo &other) noexcept { d.swap(other.d); }
 
     static ItemType typeFromDirectoryEntry(const std::filesystem::directory_entry &dirent);
 
-    // TODO: getter setter, shared_data?
-    /** FileName of the entry (this does not contain any directory or path, just the plain name */
-    QString name;
-    ItemType type = ItemTypeUnsupported;
-    time_t modtime = 0;
-    int64_t size = 0;
-    uint64_t inode = 0;
-    bool isDirectory = false;
-    bool isHidden = false;
-    bool isVirtualFile = false;
+    bool isHidden() const;
 
-    // TODO: remove
-    bool isSymLink = false;
-    bool isValid() const { return !name.isNull(); }
+    /** FileName of the entry (this does not contain any directory or path, just the plain name */
+    QString name() const;
+    time_t modtime() const;
+    int64_t size() const;
+    uint64_t inode() const;
+    ItemType type() const;
+    bool isDirectory() const;
+    bool isVirtualFile() const;
+    bool isSymLink() const;
+    bool isValid() const;
+
+private:
+    QExplicitlySharedDataPointer<LocalInfoData> d;
 };
 }
+Q_DECLARE_SHARED(OCC::LocalInfo);
