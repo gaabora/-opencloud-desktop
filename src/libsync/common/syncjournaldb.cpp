@@ -52,6 +52,14 @@ const auto getFileRecordQueryC =
                       " FROM metadata"
                       " LEFT JOIN checksumtype as contentchecksumtype ON metadata.contentChecksumTypeId == contentchecksumtype.id ");
 
+quint64 getPHash(const QByteArray &file)
+{
+    qint64 h;
+    int len = file.length();
+
+    h = c_jhash64((uint8_t *)file.data(), len, 0);
+    return h;
+}
 
 void fillFileRecordFromGetQuery(OCC::SyncJournalFileRecord &rec, OCC::SqlQuery &query)
 {
@@ -396,14 +404,6 @@ bool SyncJournalDb::checkConnect()
                         ");");
     if (!createQuery.exec()) {
         return sqlFail(QStringLiteral("Create table checksumtype"), createQuery);
-    }
-
-    // create the datafingerprint table.
-    createQuery.prepare("CREATE TABLE IF NOT EXISTS datafingerprint("
-                        "fingerprint TEXT UNIQUE"
-                        ");");
-    if (!createQuery.exec()) {
-        return sqlFail(QStringLiteral("Create table datafingerprint"), createQuery);
     }
 
     // create the flags table.
@@ -800,15 +800,6 @@ QVector<QByteArray> SyncJournalDb::tableColumns(const QByteArray &table)
     return columns;
 }
 
-qint64 SyncJournalDb::getPHash(const QByteArray &file)
-{
-    qint64 h;
-    int len = file.length();
-
-    h = c_jhash64((uint8_t *)file.data(), len, 0);
-    return h;
-}
-
 Result<void, QString> SyncJournalDb::setFileRecord(const SyncJournalFileRecord &record)
 {
     QMutexLocker locker(&_mutex);
@@ -830,7 +821,7 @@ Result<void, QString> SyncJournalDb::setFileRecord(const SyncJournalFileRecord &
                  << "checksum:" << record._checksumHeader << "hasDirtyPlaceholder:" << record._hasDirtyPlaceholder;
     Q_ASSERT(!record._remotePerm.isNull());
     const auto utf8Path = record._path;
-    const qint64 phash = getPHash(utf8Path);
+    const auto phash = getPHash(utf8Path);
     if (checkConnect()) {
         QByteArray remotePerm = record._remotePerm.toDbValue();
 
@@ -890,7 +881,7 @@ bool SyncJournalDb::deleteFileRecord(const QString &filename, bool recursively)
                 return false;
             }
 
-            const qint64 phash = getPHash(filename.toUtf8());
+            const auto phash = getPHash(filename.toUtf8());
             query->bindValue(1, phash);
 
             if (!query->exec()) {
@@ -1150,7 +1141,7 @@ bool SyncJournalDb::updateFileRecordChecksum(const QString &filename, const QByt
 
     qCInfo(lcDb) << "Updating file checksum" << filename << contentChecksum << contentChecksumType;
 
-    const qint64 phash = getPHash(filename.toUtf8());
+    const auto phash = getPHash(filename.toUtf8());
     if (!checkConnect()) {
         qCWarning(lcDb) << "Failed to connect database.";
         return false;
@@ -1886,49 +1877,6 @@ int SyncJournalDb::mapChecksumType(CheckSums::Algorithm checksumType)
         _checksymTypeCache[checksumType] = value;
         return value;
     }
-}
-
-QByteArray SyncJournalDb::dataFingerprint()
-{
-    QMutexLocker locker(&_mutex);
-    if (!checkConnect()) {
-        return QByteArray();
-    }
-
-    const auto query = _queryManager.get(PreparedSqlQueryManager::GetDataFingerprintQuery, QByteArrayLiteral("SELECT fingerprint FROM datafingerprint"), _db);
-    if (!query) {
-        return QByteArray();
-    }
-
-    if (!query->exec()) {
-        return QByteArray();
-    }
-
-    if (!query->next().hasData) {
-        return QByteArray();
-    }
-    return query->baValue(0);
-}
-
-void SyncJournalDb::setDataFingerprint(const QByteArray &dataFingerprint)
-{
-    QMutexLocker locker(&_mutex);
-    if (!checkConnect()) {
-        return;
-    }
-
-    const auto setDataFingerprintQuery1 =
-        _queryManager.get(PreparedSqlQueryManager::SetDataFingerprintQuery1, QByteArrayLiteral("DELETE FROM datafingerprint;"), _db);
-    const auto setDataFingerprintQuery2 =
-        _queryManager.get(PreparedSqlQueryManager::SetDataFingerprintQuery2, QByteArrayLiteral("INSERT INTO datafingerprint (fingerprint) VALUES (?1);"), _db);
-    if (!setDataFingerprintQuery1 || !setDataFingerprintQuery2) {
-        return;
-    }
-
-    setDataFingerprintQuery1->exec();
-
-    setDataFingerprintQuery2->bindValue(1, dataFingerprint);
-    setDataFingerprintQuery2->exec();
 }
 
 void SyncJournalDb::setConflictRecord(const ConflictRecord &record)
