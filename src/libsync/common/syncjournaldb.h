@@ -19,19 +19,15 @@
 #ifndef SYNCJOURNALDB_H
 #define SYNCJOURNALDB_H
 
-#include <QDateTime>
-#include <QHash>
-#include <QObject>
-#include <functional>
-#include <qmutex.h>
 
-#include "common/checksumalgorithms.h"
-#include "common/ownsql.h"
-#include "common/pinstate.h"
-#include "common/preparedsqlquerymanager.h"
-#include "common/result.h"
-#include "common/syncjournalfilerecord.h"
-#include "common/utility.h"
+#include "libsync/common/checksumalgorithms.h"
+#include "libsync/common/ownsql.h"
+#include "libsync/common/preparedsqlquerymanager.h"
+#include "libsync/common/result.h"
+#include "libsync/common/syncjournalfilerecord.h"
+#include "libsync/common/utility.h"
+
+#include <QMutex>
 
 namespace OCC {
 class SyncJournalFileRecord;
@@ -55,12 +51,11 @@ public:
     static bool dbIsTooNewForClient(const QString &dbFilePath);
 
     // To verify that the record could be found check with SyncJournalFileRecord::isValid()
-    bool getFileRecord(const QString &filename, SyncJournalFileRecord *rec) { return getFileRecord(filename.toUtf8(), rec); }
-    bool getFileRecord(const QByteArray &filename, SyncJournalFileRecord *rec);
-    bool getFileRecordByInode(quint64 inode, SyncJournalFileRecord *rec);
+    SyncJournalFileRecord getFileRecord(const QString &filename);
+    SyncJournalFileRecord getFileRecordByInode(quint64 inode);
     bool getFileRecordsByFileId(const QByteArray &fileId, const std::function<void(const SyncJournalFileRecord &)> &rowCallback);
-    bool getFilesBelowPath(const QByteArray &path, const std::function<void(const SyncJournalFileRecord &)> &rowCallback);
-    bool listFilesInPath(const QByteArray &path, const std::function<void(const SyncJournalFileRecord &)> &rowCallback);
+    bool getFilesBelowPath(const QString &path, const std::function<void(const SyncJournalFileRecord &)> &rowCallback);
+    bool listFilesInPath(const QString &path, const std::function<void(const SyncJournalFileRecord &)> &rowCallback);
     const QVector<SyncJournalFileRecord> getFileRecordsWithDirtyPlaceholders() const;
     Result<void, QString> setFileRecord(const SyncJournalFileRecord &record);
 
@@ -141,9 +136,6 @@ public:
 
     SyncJournalErrorBlacklistRecord errorBlacklistEntry(const QString &);
     bool deleteStaleErrorBlacklistEntries(const QSet<QString> &keep);
-
-    /// Delete flags table entries that have no metadata correspondent
-    void deleteStaleFlagsEntries();
 
     void avoidRenamesOnNextSync(const QString &path) { avoidRenamesOnNextSync(path.toUtf8()); }
     void avoidRenamesOnNextSync(const QByteArray &path);
@@ -251,7 +243,7 @@ public:
      *
      * Will return an empty string if it's not even a conflict file by pattern.
      */
-    QByteArray conflictFileBaseName(const QByteArray &conflictName);
+    QString conflictFileBaseName(const QString &conflictName);
 
     /**
      * Delete any file entry. This will force the next sync to re-sync everything as if it was new,
@@ -259,103 +251,6 @@ public:
      * it will be a conflict that will be automatically resolved if the file is the same.
      */
     void clearFileTable();
-
-    /**
-     * Set the 'ItemTypeVirtualFileDownload' to all the files that have the ItemTypeVirtualFile flag
-     * within the directory specified path path
-     *
-     * The path "" marks everything.
-     */
-    void markVirtualFileForDownloadRecursively(const QByteArray &path);
-
-    /** Grouping for all functions relating to pin states,
-     *
-     * Use internalPinStates() to get at them.
-     */
-    struct OPENCLOUD_SYNC_EXPORT PinStateInterface
-    {
-        PinStateInterface(SyncJournalDb *db);
-        PinStateInterface(const PinStateInterface &) = delete;
-        PinStateInterface(PinStateInterface &&) = delete;
-
-        /**
-         * Gets the PinState for the path without considering parents.
-         *
-         * If a path has no explicit PinState "Inherited" is returned.
-         *
-         * The path should not have a trailing slash.
-         * It's valid to use the root path "".
-         *
-         * Returns none on db error.
-         */
-        Optional<PinState> rawForPath(const QByteArray &path);
-
-        /**
-         * Gets the PinState for the path after inheriting from parents.
-         *
-         * If the exact path has no entry or has an Inherited state,
-         * the state of the closest parent path is returned.
-         *
-         * The path should not have a trailing slash.
-         * It's valid to use the root path "".
-         *
-         * Never returns PinState::Inherited. If the root is "Inherited"
-         * or there's an error, "AlwaysLocal" is returned.
-         *
-         * Returns none on db error.
-         */
-        Optional<PinState> effectiveForPath(const QByteArray &path);
-
-        /**
-         * Like effectiveForPath() but also considers subitem pin states.
-         *
-         * If the path's pin state and all subitem's pin states are identical
-         * then that pin state will be returned.
-         *
-         * If some subitem's pin state is different from the path's state,
-         * PinState::Inherited will be returned. Inherited isn't returned in
-         * any other cases.
-         *
-         * It's valid to use the root path "".
-         * Returns none on db error.
-         */
-        Optional<PinState> effectiveForPathRecursive(const QByteArray &path);
-
-        /**
-         * Sets a path's pin state.
-         *
-         * The path should not have a trailing slash.
-         * It's valid to use the root path "".
-         */
-        void setForPath(const QByteArray &path, PinState state);
-
-        /**
-         * Wipes pin states for a path and below.
-         *
-         * Used when the user asks a subtree to have a particular pin state.
-         * The path should not have a trailing slash.
-         * The path "" wipes every entry.
-         */
-        void wipeForPathAndBelow(const QByteArray &path);
-
-        /**
-         * Returns list of all paths with their pin state as in the db.
-         *
-         * Returns nothing on db error.
-         * Note that this will have an entry for "".
-         */
-        Optional<QVector<QPair<QByteArray, PinState>>> rawList();
-
-        SyncJournalDb *_db;
-    };
-    friend struct PinStateInterface;
-
-    /** Access to PinStates stored in the database.
-     *
-     * Important: Not all vfs plugins store the pin states in the database,
-     * prefer to use Vfs::pinState() etc.
-     */
-    PinStateInterface internalPinStates();
 
     /**
      * Only used for auto-test:

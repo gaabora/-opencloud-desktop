@@ -32,6 +32,7 @@
 
 #include <thread>
 
+using namespace Qt::Literals::StringLiterals;
 using namespace std::chrono_literals;
 
 namespace {
@@ -293,7 +294,8 @@ int SqlQuery::prepare(const QByteArray &sql, bool allow_failure)
             if (lcSql().isDebugEnabled()) {
                 _boundValues.resize(sqlite3_bind_parameter_count(_stmt));
                 for (int i = 1; i <= _boundValues.size(); ++i) {
-                    _boundValues[i - 1].name = QString::fromUtf8(sqlite3_bind_parameter_name(_stmt, i));
+                    const auto name = QRegularExpression::escape(QString::fromUtf8(sqlite3_bind_parameter_name(_stmt, i)));
+                    _boundValues[i - 1].name = QRegularExpression(uR"(%1\b)"_s.arg(name));
                 }
             }
         }
@@ -335,7 +337,7 @@ bool SqlQuery::exec()
                     // the result can be inaccurate
                     QString query = QString::fromUtf8(_sql);
                     for (const auto &v : _boundValues) {
-                        query.replace(query.indexOf(v.name), v.name.size(), v.value);
+                        query.replace(v.name, v.value);
                     }
                     char *actualQuery = sqlite3_expanded_sql(_stmt);
                     qCDebug(lcSql) << "SQL exec: Estimated query:" << query << "Actual query:" << QString::fromUtf8(actualQuery) << "Try:" << n;
@@ -405,10 +407,6 @@ void SqlQuery::bindValueInternal(int pos, const QVariant &value)
         return;
     }
 
-    const auto bindUtf16 = [this](int pos, const QString &str) {
-        return sqlite3_bind_text16(_stmt, pos, str.utf16(), static_cast<int>(str.size() * sizeof(ushort)), SQLITE_TRANSIENT);
-    };
-
     switch (value.typeId()) {
     case QMetaType::Int:
     case QMetaType::Bool:
@@ -418,27 +416,17 @@ void SqlQuery::bindValueInternal(int pos, const QVariant &value)
         res = sqlite3_bind_double(_stmt, pos, value.toDouble());
         break;
     case QMetaType::UInt:
+    case QMetaType::Long:
+    case QMetaType::ULong:
     case QMetaType::LongLong:
     case QMetaType::ULongLong:
         res = sqlite3_bind_int64(_stmt, pos, value.toLongLong());
         break;
-    case QMetaType::QDateTime: {
-        const QDateTime dateTime = value.toDateTime();
-        const QString str = dateTime.toString(QStringLiteral("yyyy-MM-ddThh:mm:ss.zzz"));
-        res = bindUtf16(pos, str);
-        break;
-    }
-    case QMetaType::QTime: {
-        const QTime time = value.toTime();
-        const QString str = time.toString(QStringLiteral("hh:mm:ss.zzz"));
-        res = bindUtf16(pos, str);
-        break;
-    }
     case QMetaType::QString: {
-        if (!value.toString().isNull()) {
+        if (!value.isNull()) {
             // lifetime of string == lifetime of its qvariant
             const QString *str = static_cast<const QString *>(value.constData());
-            res = bindUtf16(pos, *str);
+            res = sqlite3_bind_text16(_stmt, pos, str->utf16(), static_cast<int>(str->size() * sizeof(ushort)), SQLITE_TRANSIENT);
         } else {
             res = sqlite3_bind_null(_stmt, pos);
         }
@@ -450,9 +438,7 @@ void SqlQuery::bindValueInternal(int pos, const QVariant &value)
         break;
     }
     default: {
-        QString str = value.toString();
-        // SQLITE_TRANSIENT makes sure that sqlite buffers the data
-        res = sqlite3_bind_text16(_stmt, pos, str.utf16(), static_cast<int>(str.size() * sizeof(ushort)), SQLITE_TRANSIENT);
+        qCWarning(lcSql) << "Unsupported raw type detected" << value.typeId() << value.typeName() << value.metaType().sizeOf() << value;
         break;
     }
     }
