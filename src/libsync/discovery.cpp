@@ -219,15 +219,9 @@ bool ProcessDirectoryJob::handleExcluded(const QString &path, const QString &loc
             item->_errorString = tr("File/Folder is ignored because it's hidden.");
             item->_status = SyncFileItem::Excluded;
             break;
-        case CSYNC_FILE_EXCLUDE_STAT_FAILED:
-            item->_errorString = tr("Stat failed.");
-            break;
         case CSYNC_FILE_EXCLUDE_CONFLICT:
             item->_errorString = tr("Conflict: Server version downloaded, local copy renamed and not uploaded.");
             item->_status = SyncFileItem::Conflict;
-        break;
-        case CSYNC_FILE_EXCLUDE_CANNOT_ENCODE:
-            item->_errorString = tr("The filename cannot be encoded on your file system.");
             break;
         case CSYNC_FILE_EXCLUDE_SERVER_BLACKLISTED:
             item->_errorString = tr("The filename is blacklisted on the server.");
@@ -1024,7 +1018,7 @@ void ProcessDirectoryJob::processBlacklisted(const PathTuple &path, const OCC::L
     } else {
         item->setInstruction(CSYNC_INSTRUCTION_IGNORE);
         item->_status = SyncFileItem::FileIgnored;
-        item->_errorString = tr("SelectiveSync: Ignored because its path is deselected");
+        item->_errorString = tr("Selective sync: Ignored because its path is deselected");
         _childIgnored = true;
     }
 

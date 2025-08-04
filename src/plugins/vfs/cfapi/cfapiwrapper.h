@@ -41,6 +41,16 @@ namespace CfApiWrapper {
 
         inline auto size() const { return _data.size(); }
 
+        inline QByteArray fileId() const
+        {
+            if (get()->FileIdentityLength == 0) {
+                return {};
+            }
+            // the file id increases the struct size, ensure we fetched the whole dynamic struct
+            Q_ASSERT(size() > (sizeof(T) + 20));
+            return QByteArray(reinterpret_cast<char *>(get()->FileIdentity), get()->FileIdentityLength);
+        }
+
         PinState pinState() const
         {
             Q_ASSERT(this);
@@ -54,7 +64,7 @@ namespace CfApiWrapper {
             case CF_PIN_STATE_INHERIT:
                 return OCC::PinState::Inherited;
             case CF_PIN_STATE_EXCLUDED:
-                return OCC::PinState::Inherited;
+                return OCC::PinState::Excluded;
             }
             Q_UNREACHABLE();
         }
@@ -101,8 +111,7 @@ namespace CfApiWrapper {
     Result<OCC::Vfs::ConvertToPlaceholderResult, QString> convertToPlaceholder(
         const QString &path, time_t modtime, qint64 size, const QByteArray &fileId, const QString &replacesPath);
     Result<OCC::Vfs::ConvertToPlaceholderResult, QString> dehydratePlaceholder(const QString &path, time_t modtime, qint64 size, const QByteArray &fileId);
-    Result<OCC::Vfs::ConvertToPlaceholderResult, QString> updatePlaceholderMarkInSync(
-        const QString &path, const QByteArray &fileId, const QString &replacesPath = QString());
+    Result<OCC::Vfs::ConvertToPlaceholderResult, QString> updatePlaceholderMarkInSync(const QString &path);
     bool isPlaceHolderInSync(const QString &filePath);
 }
 
