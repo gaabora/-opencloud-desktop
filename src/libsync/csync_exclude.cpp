@@ -215,7 +215,7 @@ static CSYNC_EXCLUDE_TYPE _csync_excluded_common(QStringView path, bool excludeC
 #endif
 
     /* Do not sync desktop.ini files anywhere in the tree. */
-    if (bname.startsWith("desktop.ini"_L1, Qt::CaseInsensitive)) {
+    if (bname.compare("desktop.ini"_L1, Qt::CaseInsensitive) == 0) {
         return CSYNC_FILE_SILENTLY_EXCLUDED;
     }
 
@@ -369,6 +369,7 @@ bool ExcludedFiles::isExcludedRemote(QStringView filePath, QStringView basePath,
     }
 
     auto relativePath = filePath.mid(basePath.size());
+    Q_ASSERT(!relativePath.isEmpty());
     if (relativePath.endsWith(QLatin1Char('/'))) {
         relativePath.chop(1);
     }

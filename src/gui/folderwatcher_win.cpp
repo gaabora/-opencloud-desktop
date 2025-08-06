@@ -48,7 +48,7 @@ WatcherThread::WatchChanges WatcherThread::watchChanges(size_t fileNotifyBufferS
 
     // QVarLengthArray ensures the stack-buffer is aligned like double and qint64.
     QVarLengthArray<char, 4096 * 10> fileNotifyBuffer;
-    fileNotifyBuffer.resize(static_cast<int>(fileNotifyBufferSize));
+    fileNotifyBuffer.resize(fileNotifyBufferSize);
 
     while (true) {
         ResetEvent(_resultEvent);
@@ -111,44 +111,45 @@ WatcherThread::WatchChanges WatcherThread::watchChanges(size_t fileNotifyBufferS
 
 void WatcherThread::processEntries(FILE_NOTIFY_INFORMATION *curEntry)
 {
+    if (!curEntry) {
+        return;
+    }
     QSet<QString> paths;
-    while (curEntry) {
-        const size_t fileNameBufferSize = 4096;
-        TCHAR fileNameBuffer[fileNameBufferSize];
-
-        const int len = curEntry->FileNameLength / sizeof(wchar_t);
-        QString longfile = _longPath + QString::fromWCharArray(curEntry->FileName, len);
+    const size_t fileNameBufferSize = 4096;
+    wchar_t fileNameBuffer[fileNameBufferSize];
+    do {
+        const auto action = static_cast<FolderWatcherPrivate::ChangeAction>(curEntry->Action);
+        QString longfile = _longPath + QString::fromWCharArray(curEntry->FileName, curEntry->FileNameLength / sizeof(wchar_t));
 
         // Unless the file was removed or renamed, get its full long name
         // TODO: We could still try expanding the path in the tricky cases...
-        if (curEntry->Action != FILE_ACTION_REMOVED && curEntry->Action != FILE_ACTION_RENAMED_OLD_NAME) {
-            const auto wfile = longfile.toStdWString();
-            const int longNameSize = GetLongPathNameW(wfile.data(), fileNameBuffer, fileNameBufferSize);
+        if (action != FolderWatcherPrivate::ChangeAction::ACTION_REMOVED && action != FolderWatcherPrivate::ChangeAction::ACTION_RENAMED_OLD_NAME) {
+            const int longNameSize = GetLongPathNameW(reinterpret_cast<const wchar_t*>(longfile.utf16()), fileNameBuffer, fileNameBufferSize);
             const auto error = GetLastError();
             if (longNameSize > 0) {
                 longfile = QString::fromWCharArray(fileNameBuffer, longNameSize);
             } else {
-                qCWarning(lcFolderWatcher) << "Error converting file name" << longfile << "to full length, keeping original name." << Utility::formatWinError(error);
+                if (error == ERROR_FILE_NOT_FOUND) {
+                    qCInfo(lcFolderWatcher) << "Ignoring change in" << longfile << "the file no longer exists, probably a temporary file." << action;
+                    continue;
+                } else {
+                    qCWarning(lcFolderWatcher) << "Error converting file name" << longfile << "to full length, keeping original name." << action
+                                               << Utility::formatWinError(error);
+                }
             }
         }
 
         longfile = QDir::cleanPath(longfile);
-
         // Skip modifications of folders: One of these is triggered for changes
         // and new files in a folder, probably because of the folder's mtime
         // changing. We don't need them.
-        const bool skip = curEntry->Action == FILE_ACTION_MODIFIED && QFileInfo(longfile).isDir();
-
-        if (!skip) {
-            paths.insert(longfile);
+        if (action == FolderWatcherPrivate::ChangeAction::ACTION_MODIFIED && QFileInfo(longfile).isDir()) {
+            continue;
         }
-
-        if (curEntry->NextEntryOffset == 0) {
-            break;
-        }
+        paths.insert(longfile);
+    } while (curEntry->NextEntryOffset != 0
         // FILE_NOTIFY_INFORMATION has no fixed size and the offset is in bytes therefor we first need to cast to char
-        curEntry = reinterpret_cast<FILE_NOTIFY_INFORMATION *>(reinterpret_cast<char *>(curEntry) + curEntry->NextEntryOffset);
-    }
+        && (curEntry = reinterpret_cast<FILE_NOTIFY_INFORMATION *>(reinterpret_cast<char *>(curEntry) + curEntry->NextEntryOffset)));
     if (!paths.isEmpty()) {
         Q_EMIT changed(paths);
     }
