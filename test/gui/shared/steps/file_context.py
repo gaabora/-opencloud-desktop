@@ -20,6 +20,7 @@ from helpers.FilesHelper import (
     prefix_path_namespace,
     remember_path,
     convert_path_separators_for_os,
+    get_file_for_upload
 )
 
 
@@ -100,6 +101,20 @@ def add_copy_suffix(resource_path, resource_type):
     return resource_path + ' - Copy'
 
 
+def copy_resource(resource_type, source, destination, from_files_for_upload=False):
+    wait_for_client_to_be_ready()
+    if from_files_for_upload:
+        source_dir = get_file_for_upload(source)
+    else:
+        source_dir = get_resource_path(source)
+    destination_dir = get_resource_path(destination)
+    if source_dir == destination_dir and destination_dir != '/':
+        destination = add_copy_suffix(source, resource_type)
+    if resource_type == 'folder':
+        return shutil.copytree(source_dir, destination_dir)
+    return shutil.copy2(source_dir, destination_dir)
+
+
 @When(
     'user "|any|" creates a file "|any|" with the following content inside the sync folder'
 )
@@ -126,14 +141,8 @@ def step(context, _, filename, filesize):
 
 
 @When(r'the user copies the (file|folder) "([^"]*)" to "([^"]*)"', regexp=True)
-def step(context, resource_type, source_dir, destination_dir):
-    source = get_resource_path(source_dir)
-    destination = get_resource_path(destination_dir)
-    if source == destination and destination_dir != '/':
-        destination = add_copy_suffix(source, resource_type)
-    if resource_type == 'folder':
-        return shutil.copytree(source, destination)
-    return shutil.copy2(source, destination)
+def step(context, resource_type, file_name, destination):
+    copy_resource(resource_type, file_name, destination, False)
 
 
 @When(r'the user renames a (?:file|folder) "([^"]*)" to "([^"]*)"', regexp=True)
@@ -373,3 +382,19 @@ def step(context, folder_name):
     remember_path(folder_path)
     # when account is added, folder with suffix will be created
     remember_path(f'{folder_path} (2)')
+
+
+@Given(
+    r'the user has copied file "([^"]*)" from outside the sync folder to "([^"]*)" in the sync folder',
+    regexp=True,
+)
+def step(context, resource_name, destination):
+    copy_resource('file', resource_name, destination, True)
+
+
+@When(
+    r'the user copies file "([^"]*)" from outside the sync folder to "([^"]*)" in the sync folder',
+    regexp=True,
+)
+def step(context, resource_name, destination):
+    copy_resource('file', resource_name, destination, True)
