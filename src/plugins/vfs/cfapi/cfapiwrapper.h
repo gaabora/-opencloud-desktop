@@ -22,7 +22,16 @@ namespace OCC {
 class VfsCfApi;
 
 namespace CfApiWrapper {
+    struct CallBackContext
+    {
+        OCC::VfsCfApi *vfs;
+        QString path;
+        int64_t requestId;
+        QByteArray fileId;
+        QMap<QByteArray, QVariant> extraArgs;
 
+        inline QString requestHexId() const { return QString::number(requestId, 16); }
+    };
 
     template <typename T>
     class PlaceHolderInfo
@@ -85,8 +94,6 @@ namespace CfApiWrapper {
 
     bool isSparseFile(const QString &path);
 
-    OCC::Utility::Handle handleForPath(const QString &path);
-
     /**
      * The placeholder info can have a dynamic size, by default we don't query FileIdentity
      * If FileIdentity is required withFileIdentity must be set to true.
@@ -116,3 +123,5 @@ namespace CfApiWrapper {
 }
 
 } // namespace OCC
+
+QDebug operator<<(QDebug debug, const OCC::CfApiWrapper::CallBackContext &context);
