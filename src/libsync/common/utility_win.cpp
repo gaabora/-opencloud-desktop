@@ -34,8 +34,6 @@
 #include <QFileInfo>
 #include <QSettings>
 
-extern Q_CORE_EXPORT int qt_ntfs_permission_lookup;
-
 namespace {
 const QString systemRunPathC()
 {
@@ -95,20 +93,9 @@ void Utility::UnixTimeToLargeIntegerFiletime(time_t t, LARGE_INTEGER *hundredNSe
 
 QString Utility::formatWinError(long errorCode)
 {
-    return QStringLiteral("WindowsError: %1: %2").arg(QString::number(errorCode, 16), QString::fromWCharArray(_com_error(errorCode).ErrorMessage()));
+    return QStringLiteral("WindowsError: 0x%1: %2")
+        .arg(QString::number(static_cast<ulong>(errorCode), 16), QString::fromWCharArray(_com_error(errorCode).ErrorMessage()));
 }
-
-
-Utility::NtfsPermissionLookupRAII::NtfsPermissionLookupRAII()
-{
-    qt_ntfs_permission_lookup++;
-}
-
-Utility::NtfsPermissionLookupRAII::~NtfsPermissionLookupRAII()
-{
-    qt_ntfs_permission_lookup--;
-}
-
 
 Utility::Handle::Handle(HANDLE h, std::function<void(HANDLE)> &&close, uint32_t error)
     : _handle(h)
