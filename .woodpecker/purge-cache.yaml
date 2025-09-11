@@ -1,6 +1,6 @@
 ---
 variables:
-  - &minio_image 'minio/mc:RELEASE.2021-10-07T04-19-58Z'
+  - &minio_image "minio/mc:RELEASE.2021-10-07T04-19-58Z"
   - &minio_environment
     AWS_ACCESS_KEY_ID:
       from_secret: cache_s3_access_key
@@ -11,21 +11,33 @@ variables:
     MC_HOST: "https://s3.ci.opencloud.eu"
 
 when:
-  - event: [ push , manual ]
+  - event: [push, manual]
     branch: ${CI_REPO_DEFAULT_BRANCH}
   - event: pull_request
   - event: cron
     cron: nightly*
 
 skip_clone: true
+
+matrix:
+  include:
+    - JOB_NAME: purge-desktop-build
+      PURGE_PATH: desktop-build/
+      TTL: 1d
+    - JOB_NAME: purge-browsers-cache
+      PURGE_PATH: web/browsers-cache/
+      TTL: 14d
+    - JOB_NAME: purge-opencloud
+      PURGE_PATH: opencloud-build/
+      TTL: 1d
+
 steps:
-  purge-opencloud-build:
+  - name: ${JOB_NAME}
     image: *minio_image
     commands:
-      - mc alias set s3 $MC_HOST $AWS_ACCESS_KEY_ID $AWS_SECRET_ACCESS_KEY
-      - to_delete=$(mc find s3/$CACHE_BUCKET/desktop-build/ --older-than 1d)
+      - mc alias set s3 "$MC_HOST" "$AWS_ACCESS_KEY_ID" "$AWS_SECRET_ACCESS_KEY"
+      - to_delete=$(mc find "s3/$CACHE_BUCKET/${PURGE_PATH}" --older-than "${TTL}")
       - if [ "$to_delete" = "" ]; then exit 0; fi
       - mc rm $to_delete
     environment:
       <<: *minio_environment
-
