@@ -163,7 +163,8 @@ void FolderMan::unloadAndDeleteAllFolders()
         saveFolders();
         const auto folders = std::move(_folders);
         for (auto *folder : folders) {
-            _socketApi->slotUnregisterPath(folder);
+            // unload and disconnect all signals
+            unloadFolder(folder);
             folder->deleteLater();
         }
     }
@@ -309,9 +310,7 @@ void FolderMan::slotIsConnectedChanged()
         qCInfo(lcFolderMan) << u"Account" << accountName << u"connected, scheduling its folders";
 
         for (auto *f : std::as_const(_folders)) {
-            if (f
-                && f->canSync()
-                && f->accountState() == accountState) {
+            if (f->accountState() == accountState && f->canSync()) {
                 scheduler()->enqueueFolder(f);
             }
         }
@@ -320,12 +319,8 @@ void FolderMan::slotIsConnectedChanged()
                             << u"disconnected or paused, "
                                "terminating or descheduling sync folders";
 
-        for (auto *f : std::as_const(_folders)) {
-            if (f
-                && f->isSyncRunning()
-                && f->accountState() == accountState) {
-                f->slotTerminateSync(tr("Account disconnected or paused"));
-            }
+        if (scheduler()->currentSync() && scheduler()->currentSync()->accountState() == accountState) {
+            scheduler()->terminateCurrentSync(tr("Account disconnected or paused"));
         }
     }
 }
@@ -501,10 +496,9 @@ void FolderMan::removeFolder(Folder *f)
 
     qCInfo(lcFolderMan) << u"Removing " << f->path();
 
-    const bool currentlyRunning = f->isSyncRunning();
-    if (currentlyRunning) {
+    if (scheduler()->currentSync() == f) {
         // abort the sync now
-        f->slotTerminateSync(tr("Folder is about to be removed"));
+        scheduler()->terminateCurrentSync(tr("Folder is about to be removed"));
     }
 
     f->setSyncPaused(true);
