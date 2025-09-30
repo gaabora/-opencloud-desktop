@@ -58,7 +58,6 @@ Q_LOGGING_CATEGORY(lcAccountSettings, "gui.account.settings", QtInfoMsg)
 AccountSettings::AccountSettings(const AccountStatePtr &accountState, QWidget *parent)
     : QWidget(parent)
     , ui(new Ui::AccountSettings)
-    , _wasDisabledBefore(false)
     , _accountState(accountState)
 {
     ui->setupUi(this);
@@ -301,10 +300,6 @@ void AccountSettings::slotEnableCurrentFolder(Folder *folder, bool terminate)
     folder->slotNextSyncFullLocalDiscovery(); // ensure we don't forget about local errors
     folder->setSyncPaused(!currentlyPaused);
 
-    // keep state for the icon setting.
-    if (currentlyPaused)
-        _wasDisabledBefore = true;
-
     _model->slotUpdateFolderState(folder);
 }
 
@@ -401,19 +396,9 @@ void AccountSettings::slotAccountStateChanged()
         updateNotifications();
         break;
     }
-    case AccountState::ServiceUnavailable:
-        showConnectionLabel(tr("Server is temporarily unavailable"), SyncResult::Offline);
-        break;
-    case AccountState::MaintenanceMode:
-        showConnectionLabel(tr("Server is currently in maintenance mode"), SyncResult::Offline);
-        break;
     case AccountState::SignedOut:
         showConnectionLabel(tr("Signed out"), SyncResult::Offline);
         break;
-    case AccountState::AskingCredentials: {
-        showConnectionLabel(tr("Updating credentials..."), SyncResult::Undefined);
-        break;
-    }
     case AccountState::Connecting:
         if (NetworkInformation::instance()->isBehindCaptivePortal()) {
             showConnectionLabel(tr("Captive portal prevents connections to the server."), SyncResult::Offline);
@@ -423,12 +408,6 @@ void AccountSettings::slotAccountStateChanged()
             showConnectionLabel(tr("Connecting..."), SyncResult::Undefined);
         }
         break;
-    case AccountState::ConfigurationError:
-        showConnectionLabel(tr("Server configuration error"), SyncResult::Problem, _accountState->connectionErrors());
-        break;
-    case AccountState::NetworkError:
-        // don't display the error to the user, https://github.com/owncloud/client/issues/9790
-        [[fallthrough]];
     case AccountState::Disconnected:
         showConnectionLabel(tr("Disconnected"), SyncResult::Offline);
         break;
