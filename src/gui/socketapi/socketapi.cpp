@@ -552,7 +552,7 @@ void SocketApi::command_MAKE_AVAILABLE_LOCALLY(const QString &filesArg, SocketLi
             continue;
 
         // Update the pin state on all items
-        std::ignore = data.folder->vfs().setPinState(data.folderRelativePath, PinState::AlwaysLocal);
+        std::ignore = data.folder->vfs().setPinState(data.localPath, PinState::AlwaysLocal);
 
         // Trigger sync
         data.folder->schedulePathForLocalDiscovery(data.folderRelativePath);
@@ -571,7 +571,7 @@ void SocketApi::command_MAKE_ONLINE_ONLY(const QString &filesArg, SocketListener
             continue;
 
         // Update the pin state on all items
-        std::ignore = data.folder->vfs().setPinState(data.folderRelativePath, PinState::OnlineOnly);
+        std::ignore = data.folder->vfs().setPinState(data.localPath, PinState::OnlineOnly);
 
         // Trigger sync
         data.folder->schedulePathForLocalDiscovery(data.folderRelativePath);
