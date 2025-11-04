@@ -151,7 +151,10 @@ void AbstractNetworkJob::sendRequest(const QByteArray &verb,
         _request.setAttribute(QNetworkRequest::CacheLoadControlAttribute, _cacheLoadControl.value());
     }
 
-    _requestBody = requestBody;
+    if (requestBody) {
+        _requestBody = requestBody;
+        _requestBody->setParent(this);
+    }
 
     Q_ASSERT(_request.url().isEmpty() || _request.url() == url());
     Q_ASSERT(_request.transferTimeout() == 0 || _request.transferTimeout() == duration_cast<milliseconds>(_timeout).count());
@@ -165,11 +168,6 @@ void AbstractNetworkJob::sendRequest(const QByteArray &verb,
     }
 
     auto reply = _account->sendRawRequest(verb, _request.url(), _request, requestBody);
-
-    if (_requestBody) {
-        _requestBody->setParent(this);
-    }
-
     adoptRequest(reply);
 }
 
@@ -284,7 +282,12 @@ AbstractNetworkJob::~AbstractNetworkJob()
         qCCritical(lcNetworkJob) << u"Deleting running job" << this;
     }
     if (_reply) {
-        _reply->disconnect();
+        // the body must live as long as the reply exists
+        // until now the body was parented by this network job
+        if (_requestBody) {
+            _requestBody->setParent(_reply);
+        }
+        _reply->disconnect(this);
         _reply->abort();
         _reply->deleteLater();
         _reply.clear();
