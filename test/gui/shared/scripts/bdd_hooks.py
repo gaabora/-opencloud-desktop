@@ -169,7 +169,7 @@ def hook(context):
 def get_active_widget():
     dialog_widgets = object.children(squish.waitForObject(AccountSetting.DIALOG_STACK, get_config('minSyncTimeout') * 100))
     for child_widget in dialog_widgets:
-        if hasattr(child_widget, "objectName") and child_widget.objectName != "page":
+        if hasattr(child_widget, "objectName") and child_widget.objectName != "" and child_widget.objectName != "page":
             return child_widget
 
     # return empty object if not found
