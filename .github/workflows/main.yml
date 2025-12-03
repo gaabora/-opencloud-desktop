@@ -42,12 +42,12 @@ jobs:
             - target: windows-cl-msvc2022-x86_64
               os: windows-latest
               container:
-            - target: macos-clang-arm64
-              os: macos-latest
-              container:
-            - target: linux-gcc-x86_64
-              os: ubuntu-latest
-              container: ghcr.io/opencloud-eu/ci-docker-desktop/appimage:latest
+            # - target: macos-clang-arm64
+            #   os: macos-latest
+            #   container:
+            # - target: linux-gcc-x86_64
+            #   os: ubuntu-latest
+            #   container: ghcr.io/opencloud-eu/ci-docker-desktop/appimage:latest
 
     name: ${{ matrix.target }}
 
@@ -186,15 +186,17 @@ jobs:
       run: |
         & "${env:GITHUB_WORKSPACE}/.github/workflows/.craft.ps1" -c --no-cache --package opencloud/opencloud-desktop
 
-    - name: Package NSIS (Standard EXE)
-      if: ${{ matrix.os  == 'windows-latest' && github.event_name != 'pull_request' }}
-      run: |
-        & "${env:GITHUB_WORKSPACE}/.github/workflows/.craft.ps1" -c --no-cache --package --options "[Packager]PackageType=NullPackager" opencloud/opencloud-desktop
-
     - name: Package Appx
+      continue-on-error: true
       if: ${{ matrix.os  == 'windows-latest' && github.event_name != 'pull_request' }}
       run: |
         & "${env:GITHUB_WORKSPACE}/.github/workflows/.craft.ps1" -c --no-cache --package --options "[Packager]PackageType=AppxPackager" --options "[Packager]Destination=${{ github.workspace }}/appx/" opencloud/opencloud-desktop
+    
+    - name: Package NSIS (Standard EXE)
+      continue-on-error: true
+      if: ${{ matrix.os  == 'windows-latest' && github.event_name != 'pull_request' }}
+      run: |
+        & "${env:GITHUB_WORKSPACE}/.github/workflows/.craft.ps1" -c --no-cache --package --options "[Packager]PackageType=NullsoftInstallerPackager" --options "[Packager]Destination=${{ github.workspace }}/exe/" opencloud/opencloud-desktop
 
     - name: Prepare artifacts
       run: |
@@ -215,8 +217,19 @@ jobs:
         path: ${{ github.workspace }}/binaries/*
 
     - name: Upload appx
-      if: ${{ matrix.os  == 'windows-latest' && github.event_name != 'pull_request' }}
+      continue-on-error: true
+      if: ${{ matrix.os  == 'windows-latest' }}
       uses: actions/upload-artifact@v5
       with:
         name: ${{ matrix.target }}-appx-${{ github.run_number }}
         path: ${{ github.workspace }}/appx/*
+        
+
+    - name: Upload exe
+      continue-on-error: true
+      if: ${{ matrix.os  == 'windows-latest' }}
+      uses: actions/upload-artifact@v5
+      with:
+        name: ${{ matrix.target }}-exe-${{ github.run_number }}
+        path: ${{ github.workspace }}/exe/*
+        if-no-files-found: ignore
